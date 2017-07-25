@@ -29,4 +29,8 @@ defmodule ExTensorflowTest do
     buffer = ExTensorflow.new_buffer_from_string("just some data")
     assert ExTensorflow.string_from_buffer(buffer) == "just some data"
   end
+
+  test "Graph" do
+    _graph = ExTensorflow.new_graph
+  end
 end

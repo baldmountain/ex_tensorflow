@@ -11,19 +11,65 @@ defmodule Example do
   @mean 117.0
   @scale 1.0
 
-  # def constant(graph, name, data) do
-  #   t = ExTensorflow.create_tensor value
-  #   g
-  #   |> ExTensorflow.opBuilder("Const", name)
-  #   |> ExTensorflow.setAttr("dtype", ExTensorflow.dataType(t))
-  #   |> ExTensorflow.setAttr("value", t)
-  #   |> ExTensorflow.build()
-  #   |> ExTensorflow.output(0)
-  # end
+  def binaryOp(graph, type, in1, in2) do
+    {:ok, operation} = graph
+      |> ExTensorflow.new_operation(type, type)
+      |> ExTensorflow.add_input(in1)
+      |> ExTensorflow.add_input(in2)
+      |> ExTensorflow.finish_operation()
+    operation
+  end
 
-  # def normalize_image(image) do
-  #   g = ExTensorflow.new_graph
-  #   input (constant g "input" image-bytes)
+  def div(g, x, y) do
+    binaryOp(g, "Div", x, y)
+  end
+
+  def sub(g, x, y) do
+    binaryOp(g, "Sub", x, y)
+  end
+
+  def resizeBilinear(g, images, size) do
+    binaryOp(g, "ResizeBilinear", images, size)
+  end
+
+  def expandDims(g, input, dim) do
+    binaryOp(g, "ExpandDims", input, dim)
+  end
+
+  def tf_cast(g, value, dtype) do
+    {:ok, operation} = g
+      |> ExTensorflow.new_operation("Cast", "Cast")
+      |> ExTensorflow.add_input(value)
+      |> ExTensorflow.set_attr_type("DstT", dtype)
+      |> ExTensorflow.finish_operation()
+    operation
+  end
+
+  def decodeJpeg(g, contents, channels) do
+    {:ok, operation} = g
+      |> ExTensorflow.new_operation("DecodeJpeg", "DecodeJpeg")
+      |> ExTensorflow.add_input(contents)
+      |> ExTensorflow.set_attr_int("channels", channels)
+      |> ExTensorflow.finish_operation()
+      IO.puts "decode"
+    operation
+  end
+
+  def constant(graph, name, value) do
+    t = ExTensorflow.create_tensor(value)
+
+    {:ok, operation_description} = graph
+      |> ExTensorflow.new_operation("Const", name)
+      |> ExTensorflow.set_attr_type("dtype", ExTensorflow.tensor_type(t))
+      |> ExTensorflow.set_attr_tensor("value", t)
+    {:ok, operation} = ExTensorflow.finish_operation(operation_description)
+    operation
+  end
+
+  def normalize_image(image_bytes) do
+    graph = ExTensorflow.new_graph
+    input = constant(graph, "input", image_bytes)
+    decodeJpeg(graph, input, 3)
   #   output (div g
   #             (sub g
   #               (resizeBilinear g
@@ -34,15 +80,15 @@ defmodule Example do
   #               (constant g "mean" mean))
   #             (constant g "scale" scale))
   #   s (Session. g)]
-  #   (-> s (.runner) (.fetch (.name (.op output))) (.run) (.get 0))))
+  # (-> s (.runner) (.fetch (.name (.op output))) (.run) (.get 0))))
 
-  # end
+  end
 
 
   def classify(file_name) do
     {:ok, graph_def} = File.read("./model/tensorflow_inception_graph.pb")
     {:ok, labels} = File.read("./model/imagenet_comp_graph_label_strings.txt")
     {:ok, image_bytes} = File.read(file_name)
-    # {:ok, image} = normalize_image(image_bytes)
+    {:ok, image} = normalize_image(image_bytes)
   end
 end

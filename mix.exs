@@ -1,7 +1,13 @@
 defmodule Mix.Tasks.Compile.TfNifs do
   def run(_args) do
-    {_result, _errcode} = System.cmd("make", [], stderr_to_stdout: true) # into: IO.stream(:stdio, :line))
-    # IO.inspect(result)
+    if match? {:win32, _}, :os.type do
+      {result, _error_code} = System.cmd("nmake", ["/F", "Makefile.win", "priv\\markdown.dll"], stderr_to_stdout: true)
+      IO.binwrite result
+    else
+      {result, _error_code} = System.cmd("make", ["ex_tensorflow.so"], stderr_to_stdout: true)
+      IO.binwrite result
+    end
+    :ok
   end
 end
 

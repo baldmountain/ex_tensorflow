@@ -20,3 +20,6 @@ erl_crash.dump
 *.ez
 
 ex_tensorflow.so
+/model
+parrot.jpg
+/ex_tensorflow.so.dSYM

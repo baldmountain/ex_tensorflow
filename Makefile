@@ -1,8 +1,28 @@
-all: ex_tensorflow.so
+MIX = mix
+CFLAGS = -g -O3 -ansi -Wall
+
+ERLANG_PATH = $(shell erl -eval 'io:format("~s", [lists:concat([code:root_dir(), "/erts-", erlang:system_info(version), "/include"])])' -s init stop -noshell)
+CFLAGS += -I$(ERLANG_PATH)
+
+ifneq ($(OS),Windows_NT)
+	CFLAGS += -fPIC
+	LDFLAGS += -ltensorflow
+
+	ifeq ($(shell uname),Darwin)
+		LDFLAGS += -dynamiclib -undefined dynamic_lookup
+	endif
+endif
+
+.PHONY: all tensorflow clean
+
+all: tensorflow
+
+tensorflow:
+	$(MIX) compile
 
 ex_tensorflow.so: src/ex_tensorflow.c
-	gcc -O3 -fPIC -I$(ERL_INCLUDE_PATH) -shared -Wl,-soname,ex_tensorflow.s0.1 -o ex_tensorflow.so -ltensorflow src/ex_tensorflow.c
+	$(CC) $(CFLAGS) -shared $(LDFLAGS) -o $@ src/ex_tensorflow.c
 
-.PHONY: clean
 clean:
-	rm ex_tensorflow.so
+	$(MIX) clean
+	rm -f ex_tensorflow.so
