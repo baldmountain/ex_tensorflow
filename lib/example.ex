@@ -57,7 +57,6 @@ defmodule Example do
 
   def constant(graph, name, value) do
     t = ExTensorflow.create_tensor(value)
-
     {:ok, operation_description} = graph
       |> ExTensorflow.new_operation("Const", name)
       |> ExTensorflow.set_attr_type("dtype", ExTensorflow.tensor_type(t))

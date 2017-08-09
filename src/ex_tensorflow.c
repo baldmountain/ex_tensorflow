@@ -227,7 +227,8 @@ create_tensor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   dims = s.size;
 
   // allocate since the input binary will be collected.
-  void *ptr = enif_alloc(s.size);
+  void *ptr = enif_alloc(s.size+1);
+  memset(ptr, 0, s.size+1);
   memcpy(ptr, (void *) s.data, s.size);
 
   // Let's create tensor and copy the memory where the pointer is stored
@@ -261,11 +262,13 @@ new_operation(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
 
   // get string parameter
   enif_inspect_binary(env, argv[1], &s);
-  op_type = enif_alloc(s.size);
+  op_type = enif_alloc(s.size+1);
+  memset(op_type, 0, s.size+1);
   memcpy(op_type, (void *) s.data, s.size);
 
   enif_inspect_binary(env, argv[2], &s);
-  op_name = enif_alloc(s.size);
+  op_name = enif_alloc(s.size+1);
+  memset(op_name, 0, s.size+1);
   memcpy(op_name, (void *) s.data, s.size);
 
   // Let's allocate the memory for a TF_OperationDescription * pointer
@@ -295,7 +298,8 @@ set_attr_int(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
 
   // get string parameter
   enif_inspect_binary(env, argv[1], &s);
-  char* name = enif_alloc(s.size);
+  char* name = enif_alloc(s.size+1);
+  memset(name, 0, s.size+1);
   memcpy(name, (void *) s.data, s.size);
 
   int value;
@@ -314,7 +318,8 @@ set_attr_type(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
 
   // get string parameter
   enif_inspect_binary(env, argv[1], &s);
-  char* name = enif_alloc(s.size);
+  char* name = enif_alloc(s.size+1);
+  memset(name, 0, s.size+1);
   memcpy(name, (void *) s.data, s.size);
 
   int value;
@@ -334,6 +339,7 @@ set_attr_tensor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   ErlNifBinary s;
   enif_inspect_binary(env, argv[1], &s);
   char* name = enif_alloc(s.size);
+  memset(name, 0, s.size+1);
   memcpy(name, (void *) s.data, s.size);
 
   TF_Tensor **tensor;
@@ -357,7 +363,6 @@ set_attr_tensor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
 
 static ERL_NIF_TERM
 add_input(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
-  fprintf(stderr, "add_input\n");
   TF_OperationDescription **op_desc = 0;
   enif_get_resource(env, argv[0], OP_DESC_RES_TYPE, (void *) &op_desc);
 
@@ -368,23 +373,19 @@ add_input(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     0
   };
   TF_AddInput(*op_desc, TF_OperationInput(input));
-  fprintf(stderr, "add_input done\n");
   return argv[0];
 }
 
 static ERL_NIF_TERM
 finish_operation(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   TF_OperationDescription **op_desc;
-  fprintf(stderr, "finish_operation\n");
   enif_get_resource(env, argv[0], OP_DESC_RES_TYPE, (void *) &op_desc);
 
   TF_Status *status = TF_NewStatus();
 
   TF_Operation *operation = TF_FinishOperation(*op_desc, status);
-  fprintf(stderr, "finish_operation: op: %p\n", operation);
 
   int code = TF_GetCode(status);
-  fprintf(stderr, "finish_operation: %d\n", code);
   if (code == TF_OK) {
     TF_DeleteStatus(status);
     TF_Operation **operation_res = enif_alloc_resource(OPERATION_RES_TYPE, sizeof(TF_Operation *));
@@ -401,7 +402,6 @@ finish_operation(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_tuple(env, 2, enif_make_atom(env, "ok"), term);
   }
   const char *msg = TF_Message(status);
-  fprintf(stderr, "finish_operation: %s\n", msg);
   ERL_NIF_TERM error_message = make_binary_from_string(env, msg);
   TF_DeleteStatus(status);
   return enif_make_tuple(env, 2, enif_make_atom(env, "error"), error_message);
