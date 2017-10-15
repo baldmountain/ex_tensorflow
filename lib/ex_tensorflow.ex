@@ -9,7 +9,7 @@ defmodule ExTensorflow do
   ## Examples
 
       iex> ExTensorflow.version
-      "1.2.1"
+      "1.3.0"
 
   """
   @on_load :load_nifs

@@ -277,6 +277,7 @@ new_operation(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   // Let's create op_desc and copy the memory where the pointer is stored
   TF_OperationDescription *op_desc = TF_NewOperation(*graph, op_type, op_name);
   memcpy((void *)op_desc_res, (void *) &op_desc, sizeof(TF_OperationDescription *));
+  fprintf(stderr, "graph1> %p\n", op_desc);
 
   // We can now make the Erlang term that holds the resource...
   ERL_NIF_TERM term = enif_make_resource(env, op_desc_res);
@@ -295,6 +296,7 @@ set_attr_int(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   ErlNifBinary s;
   TF_OperationDescription **op_desc;
   enif_get_resource(env, argv[0], OP_DESC_RES_TYPE, (void *) &op_desc);
+  fprintf(stderr, "graph2> %p\n", *op_desc);
 
   // get string parameter
   enif_inspect_binary(env, argv[1], &s);
@@ -380,10 +382,12 @@ static ERL_NIF_TERM
 finish_operation(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   TF_OperationDescription **op_desc;
   enif_get_resource(env, argv[0], OP_DESC_RES_TYPE, (void *) &op_desc);
+  fprintf(stderr, "graph3> %p\n", *op_desc);
 
   TF_Status *status = TF_NewStatus();
 
   TF_Operation *operation = TF_FinishOperation(*op_desc, status);
+  fprintf(stderr, "operation> %p\n", operation);
 
   int code = TF_GetCode(status);
   if (code == TF_OK) {

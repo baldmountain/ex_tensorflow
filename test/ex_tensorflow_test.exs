@@ -6,7 +6,7 @@ defmodule ExTensorflowTest do
   alias ExTensorflow.Code
 
   test "version" do
-    assert ExTensorflow.version == "1.2.1"
+    assert ExTensorflow.version == "1.3.0"
   end
 
   test "data_type_size" do
