@@ -51,36 +51,30 @@ defmodule Example do
       |> ExTensorflow.add_input(contents)
       |> ExTensorflow.set_attr_int("channels", channels)
       |> ExTensorflow.finish_operation()
-      IO.puts "decode"
     operation
   end
 
   def constant(graph, name, value) do
     t = ExTensorflow.create_tensor(value)
-    {:ok, operation_description} = graph
+    {:ok, operation} = graph
       |> ExTensorflow.new_operation("Const", name)
       |> ExTensorflow.set_attr_type("dtype", ExTensorflow.tensor_type(t))
       |> ExTensorflow.set_attr_tensor("value", t)
-    {:ok, operation} = ExTensorflow.finish_operation(operation_description)
+      |> ExTensorflow.finish_operation()
     operation
   end
 
   def normalize_image(image_bytes) do
     graph = ExTensorflow.new_graph
     input = constant(graph, "input", image_bytes)
-    decodeJpeg(graph, input, 3)
-  #   output (div g
-  #             (sub g
-  #               (resizeBilinear g
-  #                 (expandDims g
-  #                   (tf-cast g (decodeJpeg g input, 3) DataType/FLOAT)
-  #                   (constant g "make_batch" (int 0)))
-  #                 (constant g "size" (int-array 2 (seq [H W]))))
-  #               (constant g "mean" mean))
-  #             (constant g "scale" scale))
-  #   s (Session. g)]
-  # (-> s (.runner) (.fetch (.name (.op output))) (.run) (.get 0))))
-
+    image = tf_cast(graph, decodeJpeg(graph, input, 3), ExTensorflow.DataType.float)
+    dim = constant(graph, "make_batch", 0)
+    dims = expandDims(graph, image, dim)
+    size = constant(graph, "size", [@h, @w])
+    mean = constant(graph, "mean", @mean)
+    sub = sub(graph, dims, mean)
+    scale = constant(graph, "scale", @scale)
+    div(graph, sub, scale)
   end
 
 
@@ -88,6 +82,7 @@ defmodule Example do
     {:ok, graph_def} = File.read("./model/tensorflow_inception_graph.pb")
     {:ok, labels} = File.read("./model/imagenet_comp_graph_label_strings.txt")
     {:ok, image_bytes} = File.read(file_name)
-    {:ok, image} = normalize_image(image_bytes)
+    output = normalize_image(image_bytes)
+
   end
 end

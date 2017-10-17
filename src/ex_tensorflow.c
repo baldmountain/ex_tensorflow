@@ -33,6 +33,7 @@ tensor_res_destructor(ErlNifEnv *env, void *res) {
 }
 
 void tensor_deallocator(void* data, size_t len, void* arg) {
+  fprintf(stderr, "free tensor %p\r\n", data);
   enif_free(data);
 }
 
@@ -216,24 +217,69 @@ new_graph(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
  */
 static ERL_NIF_TERM
 create_tensor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
-  ErlNifBinary s;
-  int64_t dims;
+  TF_Tensor *tensor = 0;
 
   // Let's allocate the memory for a TF_Tensor * pointer
   TF_Tensor **tensor_res = enif_alloc_resource(TENSOR_RES_TYPE, sizeof(TF_Tensor *));
-  // get string parameter
-  enif_inspect_binary(env, argv[0], &s);
 
-  dims = s.size;
+  if (enif_is_binary(env, argv[0])) {
+    fprintf(stderr, "is binary\r\n");
+    ErlNifBinary s;
+    // get string parameter
+    enif_inspect_binary(env, argv[0], &s);
 
-  // allocate since the input binary will be collected.
-  void *ptr = enif_alloc(s.size+1);
-  memset(ptr, 0, s.size+1);
-  memcpy(ptr, (void *) s.data, s.size);
+    // allocate since the input binary will be collected.
+    TF_Status *status = TF_NewStatus();
+    void *ptr = enif_alloc(s.size+1);
+    memset(ptr, 0, s.size+1);
+    TF_StringEncode((void *) s.data, s.size, ptr, s.size+1, status);
+    int code = TF_GetCode(status);
+    fprintf(stderr, "new tensor code> %d\r\n", code);
+    if (code == TF_OK) {
+      // we should do something here if code is not TF_OK
+      // TF_DeleteStatus(status);
+    }
+    TF_DeleteStatus(status);
 
-  // Let's create tensor and copy the memory where the pointer is stored
-  TF_Tensor *tensor = TF_NewTensor(TF_UINT8, &dims, 1, ptr, s.size, tensor_deallocator, 0);
+    // Let's create tensor and copy the memory where the pointer is stored
+    tensor = TF_NewTensor(TF_STRING, 0, 0, ptr, s.size, tensor_deallocator, 0);
+
+  } else if (enif_is_number(env, argv[0])) {
+    fprintf(stderr, "is number\r\n");
+    void *ptr = enif_alloc(sizeof(long long));
+    if (enif_get_int64(env, argv[0], ptr)) {
+      // Let's create tensor and copy the memory where the pointer is stored
+      tensor = TF_NewTensor(TF_INT64, 0, 0, ptr, sizeof(long long), tensor_deallocator, 0);
+    } else {
+      double tmp;
+      enif_free(ptr);
+      ptr = enif_alloc(sizeof(float));
+      enif_get_double(env, argv[0], &tmp);
+      *((float *)ptr) = tmp;
+      tensor = TF_NewTensor(TF_FLOAT, 0, 0, ptr, sizeof(float), tensor_deallocator, 0);
+    }
+  } else if (enif_is_list(env, argv[0])) {
+    fprintf(stderr, "is list\r\n");
+    unsigned length;
+    enif_get_list_length(env, argv[0], &length);
+    long long *ptr = enif_alloc(length * sizeof(long long));
+    memset(ptr, 0, length * sizeof(long long));
+    fprintf(stderr, "length> %u\r\n", length);
+
+    ERL_NIF_TERM head, tail;
+    tail = argv[0];
+    unsigned count = 0;
+    while(enif_get_list_cell(env, tail, &head, &tail) && count < length) {
+      enif_get_int64(env, tail, (long *)&ptr[count++]);
+    }
+    int64_t dims = length;
+    tensor = TF_NewTensor(TF_INT64, &dims, 1, ptr, length * sizeof(long long), tensor_deallocator, 0);
+  } else {
+    fprintf(stderr, "is something else\r\n");
+  }
+
   memcpy((void *) tensor_res, (void *) &tensor, sizeof(TF_Tensor *));
+  fprintf(stderr, "tensor> %p\r\n", tensor);
 
   // We can now make the Erlang term that holds the resource...
   ERL_NIF_TERM term = enif_make_resource(env, tensor_res);
@@ -277,7 +323,7 @@ new_operation(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   // Let's create op_desc and copy the memory where the pointer is stored
   TF_OperationDescription *op_desc = TF_NewOperation(*graph, op_type, op_name);
   memcpy((void *)op_desc_res, (void *) &op_desc, sizeof(TF_OperationDescription *));
-  fprintf(stderr, "graph1> %p\n", op_desc);
+  fprintf(stderr, "new_operation> %p\r\n", op_desc);
 
   // We can now make the Erlang term that holds the resource...
   ERL_NIF_TERM term = enif_make_resource(env, op_desc_res);
@@ -296,7 +342,7 @@ set_attr_int(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   ErlNifBinary s;
   TF_OperationDescription **op_desc;
   enif_get_resource(env, argv[0], OP_DESC_RES_TYPE, (void *) &op_desc);
-  fprintf(stderr, "graph2> %p\n", *op_desc);
+  fprintf(stderr, "set_attr_int> %p\r\n", *op_desc);
 
   // get string parameter
   enif_inspect_binary(env, argv[1], &s);
@@ -317,6 +363,7 @@ set_attr_type(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   ErlNifBinary s;
   TF_OperationDescription **op_desc;
   enif_get_resource(env, argv[0], OP_DESC_RES_TYPE, (void *) &op_desc);
+  fprintf(stderr, "set_attr_type> %p\r\n", *op_desc);
 
   // get string parameter
   enif_inspect_binary(env, argv[1], &s);
@@ -327,6 +374,7 @@ set_attr_type(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   int value;
   enif_get_int(env, argv[2], &value);
 
+  fprintf(stderr, "set_attr_type name> \"%s\" %d\r\n", name, value);
   TF_SetAttrType(*op_desc, name, value);
   enif_free(name);
   return argv[0];
@@ -336,6 +384,7 @@ static ERL_NIF_TERM
 set_attr_tensor(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   TF_OperationDescription **op_desc;
   enif_get_resource(env, argv[0], OP_DESC_RES_TYPE, (void *) &op_desc);
+  fprintf(stderr, "set_attr_tensor> %p\r\n", *op_desc);
 
   // get string parameter
   ErlNifBinary s;
@@ -367,14 +416,16 @@ static ERL_NIF_TERM
 add_input(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   TF_OperationDescription **op_desc = 0;
   enif_get_resource(env, argv[0], OP_DESC_RES_TYPE, (void *) &op_desc);
+  fprintf(stderr, "add_input> %p\r\n", *op_desc);
 
   TF_Operation **operation = 0;
   enif_get_resource(env, argv[1], OPERATION_RES_TYPE, (void *) &operation);
-  TF_Input input = {
+  TF_Output input = {
     *operation,
     0
   };
-  TF_AddInput(*op_desc, TF_OperationInput(input));
+  fprintf(stderr, "add_input op> %p\r\n", *operation);
+  TF_AddInput(*op_desc, input);
   return argv[0];
 }
 
@@ -382,14 +433,14 @@ static ERL_NIF_TERM
 finish_operation(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   TF_OperationDescription **op_desc;
   enif_get_resource(env, argv[0], OP_DESC_RES_TYPE, (void *) &op_desc);
-  fprintf(stderr, "graph3> %p\n", *op_desc);
+  fprintf(stderr, "finish_operation> %p\r\n", *op_desc);
 
   TF_Status *status = TF_NewStatus();
 
   TF_Operation *operation = TF_FinishOperation(*op_desc, status);
-  fprintf(stderr, "operation> %p\n", operation);
 
   int code = TF_GetCode(status);
+  fprintf(stderr, "code> %d\r\n", code);
   if (code == TF_OK) {
     TF_DeleteStatus(status);
     TF_Operation **operation_res = enif_alloc_resource(OPERATION_RES_TYPE, sizeof(TF_Operation *));
@@ -406,6 +457,7 @@ finish_operation(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_tuple(env, 2, enif_make_atom(env, "ok"), term);
   }
   const char *msg = TF_Message(status);
+  fprintf(stderr, "msg> %s\r\n", msg);
   ERL_NIF_TERM error_message = make_binary_from_string(env, msg);
   TF_DeleteStatus(status);
   return enif_make_tuple(env, 2, enif_make_atom(env, "error"), error_message);
