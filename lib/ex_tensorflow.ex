@@ -1,4 +1,4 @@
-defmodule ExTensorflow do
+  defmodule ExTensorflow do
   @moduledoc """
   Documentation for ExTensorflow.
   """
@@ -21,6 +21,7 @@ defmodule ExTensorflow do
   @type op_description :: any
   @type operation :: any
   @type output :: any
+  @type session :: any
 
   def load_nifs do
     :erlang.load_nif('./ex_tensorflow', 0)
@@ -83,7 +84,7 @@ defmodule ExTensorflow do
   end
 
   @spec tensor_type(binary) :: non_neg_integer
-  def tensor_type(tensor) do
+  def tensor_type(_tensor) do
     raise "NIF tensor_type/1 not implemented"
   end
 
@@ -116,5 +117,20 @@ defmodule ExTensorflow do
   @spec finish_operation(op_description) :: {:ok, operation} | {:error, binary}
   def finish_operation(_op_description) do
     raise "NIF finish_operation/1 not implemented"
+  end
+
+  @spec new_session(graph) :: {:ok, session} | {:error, binary}
+  def new_session(_graph) do
+    raise "NIF new_session/1 not implemented"
+  end
+
+  @spec new_session(graph, map) :: {:ok, session} | {:error, binary}
+  def new_session(_graph, _options) do
+    raise "NIF new_session/2 not implemented"
+  end
+
+  @spec run_session(session, operation) :: {:ok, session} | {:error, binary}
+  def run_session(_session, _operation) do
+    raise "NIF run_session/2 not implemented"
   end
 end

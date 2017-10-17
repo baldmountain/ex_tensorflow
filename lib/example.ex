@@ -74,7 +74,9 @@ defmodule Example do
     mean = constant(graph, "mean", @mean)
     sub = sub(graph, dims, mean)
     scale = constant(graph, "scale", @scale)
-    div(graph, sub, scale)
+    output = div(graph, sub, scale)
+    {:ok, session} = ExTensorflow.new_session(graph)
+    {:ok, session} = ExTensorflow.run_session(session, output)
   end
 
 
@@ -83,6 +85,5 @@ defmodule Example do
     {:ok, labels} = File.read("./model/imagenet_comp_graph_label_strings.txt")
     {:ok, image_bytes} = File.read(file_name)
     output = normalize_image(image_bytes)
-
   end
 end

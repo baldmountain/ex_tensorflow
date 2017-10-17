@@ -9,6 +9,7 @@ ErlNifResourceType *GRAPH_RES_TYPE;
 ErlNifResourceType *TENSOR_RES_TYPE;
 ErlNifResourceType *OP_DESC_RES_TYPE;
 ErlNifResourceType *OPERATION_RES_TYPE;
+ErlNifResourceType *SESSION_RES_TYPE;
 
 // This is called everytime a resource is deallocated (which happens when
 // enif_release_resource is called and Erlang garbage collects the memory)
@@ -47,6 +48,16 @@ operation_res_destructor(ErlNifEnv *env, void *res) {
   // do nothing since TF_DeleteGraph will delete the operation
 }
 
+void
+session_res_destructor(ErlNifEnv *env, void *res) {
+  TF_Status *status = TF_NewStatus();
+  TF_DeleteSession(*(TF_Session **)res, status);
+  if (TF_GetCode(status) != TF_OK) {
+    fprintf(stderr, "Error deleting session: %s\r\n", TF_Message(status));
+  }
+  TF_DeleteStatus(status);
+}
+
 int
 load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info) {
   int flags = ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER;
@@ -56,6 +67,7 @@ load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info) {
   TENSOR_RES_TYPE = enif_open_resource_type(env, NULL, "tensor", tensor_res_destructor, flags, NULL);
   OP_DESC_RES_TYPE = enif_open_resource_type(env, NULL, "op_desc", op_desc_res_destructor, flags, NULL);
   OPERATION_RES_TYPE = enif_open_resource_type(env, NULL, "operation", operation_res_destructor, flags, NULL);
+  SESSION_RES_TYPE = enif_open_resource_type(env, NULL, "session", session_res_destructor, flags, NULL);
   return 0;
 }
 
@@ -463,6 +475,76 @@ finish_operation(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
   return enif_make_tuple(env, 2, enif_make_atom(env, "error"), error_message);
 }
 
+static ERL_NIF_TERM
+new_session(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  TF_Graph **graph;
+  enif_get_resource(env, argv[0], GRAPH_RES_TYPE, (void *) &graph);
+  fprintf(stderr, "new_session> %p\r\n", *graph);
+
+  TF_Status *status = TF_NewStatus();
+
+  TF_SessionOptions* opts = TF_NewSessionOptions();
+  TF_Session *session = TF_NewSession(*graph, opts, status);
+  TF_DeleteSessionOptions(opts);
+
+  int code = TF_GetCode(status);
+  fprintf(stderr, "code> %d\r\n", code);
+  if (code == TF_OK) {
+    TF_DeleteStatus(status);
+    TF_Session **session_res = enif_alloc_resource(SESSION_RES_TYPE, sizeof(TF_Session *));
+
+    // Let's create operation and copy the memory where the pointer is stored
+    memcpy((void *) session_res, (void *) &session, sizeof(TF_Session *));
+
+    // We can now make the Erlang term that holds the resource...
+    ERL_NIF_TERM term = enif_make_resource(env, session_res);
+
+    // ...and release the resource so that it will be freed when Erlang garbage collects
+    enif_release_resource(session_res);
+
+    return enif_make_tuple(env, 2, enif_make_atom(env, "ok"), term);
+  }
+  const char *msg = TF_Message(status);
+  fprintf(stderr, "msg> %s\r\n", msg);
+  ERL_NIF_TERM error_message = make_binary_from_string(env, msg);
+  TF_DeleteStatus(status);
+  return enif_make_tuple(env, 2, enif_make_atom(env, "error"), error_message);
+}
+
+static ERL_NIF_TERM
+run_session(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
+  TF_Session **session;
+  enif_get_resource(env, argv[0], SESSION_RES_TYPE, (void *) &session);
+  fprintf(stderr, "run_session> %p\r\n", *session);
+
+  TF_Operation **operation = 0;
+  enif_get_resource(env, argv[1], OPERATION_RES_TYPE, (void *) &operation);
+
+  TF_Status *status = TF_NewStatus();
+
+  TF_SessionRun(*session, 0, 0, 0, 0,
+    // Output tensors
+    0, 0, 0,
+    // Target operations
+    (const struct TF_Operation *const *)(*operation), 1,
+    // RunMetadata
+    0,
+    // Output status
+     status);
+
+  int code = TF_GetCode(status);
+  fprintf(stderr, "code> %d\r\n", code);
+  if (code == TF_OK) {
+    TF_DeleteStatus(status);
+    return enif_make_tuple(env, 2, enif_make_atom(env, "ok"), argv[0]);
+  }
+  const char *msg = TF_Message(status);
+  fprintf(stderr, "msg> %s\r\n", msg);
+  ERL_NIF_TERM error_message = make_binary_from_string(env, msg);
+  TF_DeleteStatus(status);
+  return enif_make_tuple(env, 2, enif_make_atom(env, "error"), error_message);
+}
+
 // Let's define the array of ErlNifFunc beforehand:
 static ErlNifFunc nif_funcs[] = {
   // {erl_function_name, erl_function_arity, c_function}
@@ -484,6 +566,10 @@ static ErlNifFunc nif_funcs[] = {
   {"set_attr_tensor", 3, set_attr_tensor},
   {"add_input", 2, add_input},
   {"finish_operation", 1, finish_operation},
+  {"new_session", 1, new_session},
+  // {"new_session", 2, new_session_with_options}
+  {"run_session", 2, run_session},
+
 };
 
 ERL_NIF_INIT(Elixir.ExTensorflow, nif_funcs, load, NULL, NULL, NULL)
